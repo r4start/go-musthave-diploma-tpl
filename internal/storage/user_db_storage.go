@@ -84,7 +84,6 @@ func (p *pgxStorage) Get(userName string) (*UserAuthorization, error) {
 	defer cancel()
 
 	r, err := p.dbConn.Query(opCtx, GetUserQuery, userName)
-	defer r.Close()
 
 	if err != nil {
 		return nil, err
@@ -94,7 +93,9 @@ func (p *pgxStorage) Get(userName string) (*UserAuthorization, error) {
 		return nil, err
 	}
 
-	for r.Next() {
+	defer r.Close()
+
+	if r.Next() {
 		authData := UserAuthorization{State: UserStateActive}
 		if err := r.Scan(&authData.ID, &authData.UserName, &authData.Secret); err != nil {
 			return nil, err
@@ -111,7 +112,6 @@ func (p *pgxStorage) GetByID(userID int64) (*UserAuthorization, error) {
 	defer cancel()
 
 	r, err := p.dbConn.Query(opCtx, GetUserByIDQuery, userID)
-	defer r.Close()
 
 	if err != nil {
 		return nil, err
@@ -121,7 +121,9 @@ func (p *pgxStorage) GetByID(userID int64) (*UserAuthorization, error) {
 		return nil, err
 	}
 
-	for r.Next() {
+	defer r.Close()
+
+	if r.Next() {
 		authData := UserAuthorization{ID: userID, State: UserStateActive}
 		if err := r.Scan(&authData.UserName, &authData.Secret); err != nil {
 			return nil, err

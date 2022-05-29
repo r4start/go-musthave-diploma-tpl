@@ -58,26 +58,4 @@ func main() {
 	defer cancel()
 
 	app.RunServerApp(serverCtx, cfg.ServerAddress, logger, userStorage)
-	//privateKey := make([]byte, 32)
-	//readBytes, err := rand.Read(privateKey)
-	//if err != nil || readBytes != len(privateKey) {
-	//	logger.Fatal("Failed to generate private key", zap.Error(err), zap.Int("generated_len", readBytes))
-	//}
-	//
-	//authorizer := jwtauth.New("HS256", privateKey, nil)
-	//
-	//authServer, err := app.NewAuthServer(serverCtx, logger, userStorage, authorizer)
-	//if err != nil {
-	//	logger.Fatal("Failed to initialize auth server", zap.Error(err))
-	//}
-	//
-	//martServer, err := app.NewAppServer(serverCtx, logger, userStorage, authorizer)
-	//if err != nil {
-	//	logger.Fatal("Failed to initialize app server", zap.Error(err))
-	//}
-	//
-	//r := chi.NewRouter()
-	//
-	//server := &http.Server{Addr: cfg.ServerAddress, Handler: authServer}
-	//server.ListenAndServe()
 }

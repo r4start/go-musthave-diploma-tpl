@@ -91,7 +91,7 @@ func (s *AuthServer) apiUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if bytes.Compare(dbUserData.Secret, []byte(authData.Password)) != 0 {
+	if !bytes.Equal(dbUserData.Secret, []byte(authData.Password)) {
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}

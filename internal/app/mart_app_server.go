@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type MartServer struct {
@@ -35,7 +36,7 @@ func (s *MartServer) apiUserOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := io.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Error("failed to read request body", zap.Error(err))
 		http.Error(w, "", http.StatusBadRequest)
@@ -59,6 +60,19 @@ func (s *MartServer) apiUserOrders(w http.ResponseWriter, r *http.Request) {
 	if userData.State != storage.UserStateActive {
 		s.logger.Error("request from disabled user", zap.Error(err))
 		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	orderID, err := strconv.ParseInt(string(b), 10, 64)
+	if err != nil {
+		s.logger.Error("failed to get order id", zap.Error(err))
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	if !IsValidLuhn(orderID) {
+		s.logger.Error("bad order id", zap.Int64("order_id", orderID))
+		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
 
@@ -105,7 +119,7 @@ func (s *MartServer) getUserID(r *http.Request) (int64, error) {
 		case float64:
 			return int64(v.(float64)), nil
 		default:
-			return v.(int64), ErrJWTKeyBadFormat
+			return 0, ErrJWTKeyBadFormat
 		}
 	}
 
