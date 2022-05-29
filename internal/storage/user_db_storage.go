@@ -9,9 +9,6 @@ import (
 )
 
 const (
-	StateActive   = "active"
-	StateDisabled = "disabled"
-
 	CreateStateEnum = `create type state as enum ('active', 'disabled');`
 
 	CreateUsersTableScheme = `
@@ -28,6 +25,9 @@ const (
 	CheckUsersTable = `select count(*) from users;`
 
 	AddUserQuery = `insert into users (name, secret) values ($1, $2);`
+
+	GetUserQuery     = `select id, name, secret from users where name = $1 and flags = 'active';`
+	GetUserByIDQuery = `select name, secret from users where id = $1 and flags = 'active';`
 
 	DatabaseOperationTimeout = 5 * time.Second
 
@@ -79,8 +79,58 @@ func (p *pgxStorage) Add(auth *UserAuthorization) error {
 	return tx.Commit(opCtx)
 }
 
-func (p *pgxStorage) Get(userName string) (UserAuthorization, error) {
-	return UserAuthorization{}, nil
+func (p *pgxStorage) Get(userName string) (*UserAuthorization, error) {
+	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	r, err := p.dbConn.Query(opCtx, GetUserQuery, userName)
+	defer r.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+
+	for r.Next() {
+		authData := UserAuthorization{State: UserStateActive}
+		if err := r.Scan(&authData.ID, &authData.UserName, &authData.Secret); err != nil {
+			return nil, err
+		}
+
+		return &authData, nil
+	}
+
+	return nil, ErrNoSuchUser
+}
+
+func (p *pgxStorage) GetByID(userID int64) (*UserAuthorization, error) {
+	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	r, err := p.dbConn.Query(opCtx, GetUserByIDQuery, userID)
+	defer r.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+
+	for r.Next() {
+		authData := UserAuthorization{ID: userID, State: UserStateActive}
+		if err := r.Scan(&authData.UserName, &authData.Secret); err != nil {
+			return nil, err
+		}
+
+		return &authData, nil
+	}
+
+	return nil, ErrNoSuchUser
 }
 
 func prepareDatabase(ctx context.Context, conn *pgxpool.Pool) error {
