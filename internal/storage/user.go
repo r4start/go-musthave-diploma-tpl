@@ -1,6 +1,8 @@
 package storage
 
-import "errors"
+import (
+	"errors"
+)
 
 const (
 	UserStateActive   = "active"
@@ -20,7 +22,7 @@ type UserAuthorization struct {
 }
 
 type UserStorage interface {
-	Add(auth *UserAuthorization) error
-	Get(userName string) (*UserAuthorization, error)
-	GetByID(userID int64) (*UserAuthorization, error)
+	AddUser(auth *UserAuthorization) error
+	GetUserAuthInfo(userName string) (*UserAuthorization, error)
+	GetUserAuthInfoByID(userID int64) (*UserAuthorization, error)
 }

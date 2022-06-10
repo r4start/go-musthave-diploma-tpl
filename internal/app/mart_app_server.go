@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/go-chi/jwtauth"
 	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
@@ -11,25 +12,30 @@ import (
 	"strconv"
 )
 
-type MartServer struct {
-	ctx         context.Context
-	logger      *zap.Logger
-	userStorage storage.UserStorage
-	authorizer  *jwtauth.JWTAuth
+type StorageServices struct {
+	storage.UserStorage
+	storage.OrderStorage
 }
 
-func NewAppServer(ctx context.Context, logger *zap.Logger, userStorage storage.UserStorage, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
+type MartServer struct {
+	ctx            context.Context
+	logger         *zap.Logger
+	storageService StorageServices
+	authorizer     *jwtauth.JWTAuth
+}
+
+func NewAppServer(ctx context.Context, logger *zap.Logger, storage StorageServices, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
 	server := &MartServer{
-		ctx:         ctx,
-		logger:      logger,
-		userStorage: userStorage,
-		authorizer:  authorizer,
+		ctx:            ctx,
+		logger:         logger,
+		storageService: storage,
+		authorizer:     authorizer,
 	}
 
 	return server, nil
 }
 
-func (s *MartServer) apiUserOrders(w http.ResponseWriter, r *http.Request) {
+func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 	if contentType := r.Header.Get("Content-Type"); contentType != "text/plain" {
 		s.logger.Error("bad content type", zap.String("content_type", contentType))
 		http.Error(w, "", http.StatusBadRequest)
@@ -50,7 +56,7 @@ func (s *MartServer) apiUserOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userData, err := s.userStorage.GetByID(userID)
+	userData, err := s.storageService.GetUserAuthInfoByID(userID)
 	if err != nil {
 		s.logger.Error("failed to get user id", zap.Error(err))
 		http.Error(w, "", http.StatusUnauthorized)
@@ -63,6 +69,12 @@ func (s *MartServer) apiUserOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !IsValidLuhn(string(b)) {
+		s.logger.Error("bad order id", zap.String("order_id", string(b)))
+		http.Error(w, "", http.StatusUnprocessableEntity)
+		return
+	}
+
 	orderID, err := strconv.ParseInt(string(b), 10, 64)
 	if err != nil {
 		s.logger.Error("failed to get order id", zap.Error(err))
@@ -70,13 +82,23 @@ func (s *MartServer) apiUserOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !IsValidLuhn(orderID) {
-		s.logger.Error("bad order id", zap.Int64("order_id", orderID))
-		http.Error(w, "", http.StatusUnprocessableEntity)
+	if err := s.storageService.AddOrder(r.Context(), userData.ID, orderID); err != nil {
+		if errors.Is(err, storage.ErrDuplicateOrder) {
+			s.logger.Error("duplicate order id", zap.Int64("order_id", orderID))
+			http.Error(w, "", http.StatusConflict)
+			return
+		}
+		if errors.Is(err, storage.ErrOrderAlreadyPlaced) {
+			s.logger.Info("order already placed", zap.Int64("order_id", orderID))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		s.logger.Error("failed to add order", zap.Error(err))
+		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *MartServer) apiParseRequest(r *http.Request, body interface{}) error {
@@ -110,14 +132,14 @@ func (s *MartServer) getUserID(r *http.Request) (int64, error) {
 		return 0, err
 	}
 
-	if v, exists := token.Get("id"); exists {
-		switch v.(type) {
+	if id, exists := token.Get("id"); exists {
+		switch value := id.(type) {
 		case int:
-			return int64(v.(int)), nil
+			return int64(value), nil
 		case int64:
-			return v.(int64), nil
+			return value, nil
 		case float64:
-			return int64(v.(float64)), nil
+			return int64(value), nil
 		default:
 			return 0, ErrJWTKeyBadFormat
 		}

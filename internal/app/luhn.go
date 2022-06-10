@@ -1,29 +1,21 @@
 package app
 
-func IsValidLuhn(number int64) bool {
-	checkNumber := checksum(number)
+func IsValidLuhn(number string) bool {
+	digitsCount := len(number)
+	isSecond := false
+	sum := 0
 
-	if checkNumber == 0 {
-		return true
-	}
-	return (10-checkNumber)%10 == 0
-}
-
-func checksum(number int64) int64 {
-	var luhn int64
-
-	for i := 0; number > 0; i++ {
-		cur := number % 10
-
-		if i%2 == 0 { // even
-			cur = cur * 2
-			if cur > 9 {
-				cur = cur%10 + cur/10
-			}
+	for i := digitsCount - 1; i >= 0; i-- {
+		d := number[i] - '0'
+		if isSecond {
+			d = d * 2
 		}
 
-		luhn += cur
-		number = number / 10
+		sum += int(d) / 10
+		sum += int(d) % 10
+
+		isSecond = !isSecond
 	}
-	return luhn % 10
+
+	return sum%10 == 0
 }

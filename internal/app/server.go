@@ -6,12 +6,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/jwtauth"
-	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"net/http"
 )
 
-func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger, userStorage storage.UserStorage) {
+func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger, st StorageServices) {
 	privateKey := make([]byte, 32)
 	readBytes, err := rand.Read(privateKey)
 	if err != nil || readBytes != len(privateKey) {
@@ -20,12 +19,12 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 
 	authorizer := jwtauth.New("HS256", privateKey, nil)
 
-	authServer, err := NewAuthServer(ctx, logger, userStorage, authorizer)
+	authServer, err := NewAuthServer(ctx, logger, st.UserStorage, authorizer)
 	if err != nil {
 		logger.Fatal("Failed to initialize auth server", zap.Error(err))
 	}
 
-	martServer, err := NewAppServer(ctx, logger, userStorage, authorizer)
+	martServer, err := NewAppServer(ctx, logger, st, authorizer)
 	if err != nil {
 		logger.Fatal("Failed to initialize app server", zap.Error(err))
 	}
@@ -48,7 +47,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 		r.Use(jwtauth.Verifier(authorizer))
 		r.Use(jwtauth.Authenticator)
 
-		r.Post("/api/user/orders", martServer.apiUserOrders)
+		r.Post("/api/user/orders", martServer.apiAddUserOrder)
 	})
 
 	server := &http.Server{Addr: serverAddress, Handler: r}
