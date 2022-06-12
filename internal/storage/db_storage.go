@@ -54,8 +54,8 @@ const (
        create table balance (
 			id bigserial primary key,
 			user_id bigint not null,
-			current bigint not null default 0,
-			withdrawn bigint not null default 0,
+			current bigint not null default 0 check (current >= 0),
+			withdrawn bigint not null default 0 check (withdrawn >= 0),
 			updated_at timestamptz not null default now(),
 
 			FOREIGN KEY (user_id)
@@ -64,24 +64,23 @@ const (
 
 	CheckBalanceTable = `select count(*) from balance;`
 	GetUserBalance    = `select current, withdrawn from balance where user_id = $1;`
+	SetBalance        = `update balance set current = current-$1, withdrawn=withdrawn+$1 where user_id=$2;`
 
 	CreateWithdrawalTableScheme = `
        create table withdrawal (
 			id bigserial primary key,
-			number bigint not null,
+			number bigint not null unique,
 			user_id bigint not null,
-			sum bigint not null,
+			sum bigint not null check (sum >= 0),
 			processed_at timestamptz not null default now(),
 
 			FOREIGN KEY (user_id)
-      			REFERENCES users(id),
-
-			FOREIGN KEY (number)
-      			REFERENCES orders(number)
+      			REFERENCES users(id)
 		);`
 
 	CheckWithdrawalTable = `select count(*) from withdrawal;`
 	GetUserWithdrawals   = `select number, sum, processed_at from withdrawal where user_id = $1;`
+	AddWithdrawal        = `insert into withdrawal (number, user_id, sum) values ($1, $2, $3);`
 
 	DatabaseOperationTimeout = 500000 * time.Second
 
@@ -273,7 +272,48 @@ func (p *pgxStorage) GetOrders(ctx context.Context, userID int64) ([]Order, erro
 }
 
 func (p *pgxStorage) Withdraw(ctx context.Context, userID, order, sum int64) error {
-	return nil
+	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	tx, err := p.dbConn.Begin(opCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(p.ctx)
+
+	r, err := tx.Query(opCtx, GetUserBalance, userID)
+	if err != nil {
+		return err
+	}
+
+	if err := r.Err(); err != nil {
+		return err
+	}
+
+	defer r.Close()
+
+	info := BalanceInfo{}
+	if r.Next() {
+		if err := r.Scan(&info.Current, &info.Withdrawn); err != nil {
+			return err
+		}
+	}
+
+	if info.Current-float64(sum) < 0 {
+		return ErrNotEnoughBalance
+	}
+
+	_, err = tx.Exec(opCtx, AddWithdrawal, order, userID, sum)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(opCtx, SetBalance, sum, userID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(opCtx)
 }
 
 func (p *pgxStorage) GetBalance(ctx context.Context, userID int64) (*BalanceInfo, error) {

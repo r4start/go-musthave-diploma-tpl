@@ -52,6 +52,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 
 		r.Get("/api/user/withdrawals", martServer.apiGetUserWithdrawals)
 		r.Get("/api/user/balance", martServer.apiGetUserBalance)
+		r.Post("/api/user/balance/withdraw", martServer.apiBalanceWithdraw)
 	})
 
 	server := &http.Server{Addr: serverAddress, Handler: r}

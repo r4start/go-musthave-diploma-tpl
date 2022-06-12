@@ -2,8 +2,11 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrNotEnoughBalance = errors.New("not enough balance")
 
 type BalanceInfo struct {
 	Current   float64 `json:"current"`

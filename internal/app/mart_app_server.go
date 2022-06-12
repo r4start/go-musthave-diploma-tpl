@@ -164,6 +164,46 @@ func (s *MartServer) apiGetUserBalance(w http.ResponseWriter, r *http.Request) {
 	s.apiWriteResponse(w, http.StatusOK, balance)
 }
 
+func (s *MartServer) apiBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
+	userData := s.getUserAuth(r)
+	if userData == nil {
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	withdrawRequest := balanceWithdrawRequest{}
+	if err := s.apiParseRequest(r, &withdrawRequest); err != nil {
+		s.logger.Error("failed to withdraw balance", zap.Int64("user_id", userData.ID), zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	if !IsValidLuhn(withdrawRequest.Order) {
+		s.logger.Error("bad order id", zap.String("order_id", withdrawRequest.Order))
+		http.Error(w, "", http.StatusUnprocessableEntity)
+		return
+	}
+
+	orderId, err := strconv.ParseInt(withdrawRequest.Order, 10, 64)
+	if err != nil {
+		s.logger.Error("bad order id", zap.String("order_id", withdrawRequest.Order))
+		http.Error(w, "", http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = s.storageService.Withdraw(r.Context(), userData.ID, orderId, withdrawRequest.Sum)
+	if err != nil {
+		if err == storage.ErrNotEnoughBalance {
+			http.Error(w, "", http.StatusPaymentRequired)
+			return
+		}
+		s.logger.Error("failed to withdraw", zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *MartServer) apiParseRequest(r *http.Request, body interface{}) error {
 	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		s.logger.Error("bad content type", zap.String("content_type", contentType))
@@ -259,4 +299,9 @@ type withdrawalsResponse struct {
 	Order       string    `json:"order"`
 	Sum         int64     `json:"sum"`
 	ProcessedAt time.Time `json:"processed_at"`
+}
+
+type balanceWithdrawRequest struct {
+	Order string `json:"order"`
+	Sum   int64  `json:"sum"`
 }
