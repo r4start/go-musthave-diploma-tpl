@@ -11,13 +11,11 @@ var (
 	ErrOrderAlreadyPlaced = errors.New("order already placed")
 )
 
-type OrderStatus int
-
 type Order struct {
-	ID         int64       `json:"number"`
-	Status     OrderStatus `json:"status"`
-	Accrual    int64       `json:"accrual"`
-	UploadedAt time.Time   `json:"uploaded_at"`
+	ID         int64
+	Status     string
+	Accrual    int64
+	UploadedAt time.Time
 }
 
 type OrderStorage interface {

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type StorageServices struct {
@@ -101,6 +102,47 @@ func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+func (s *MartServer) apiGetUserOrders(w http.ResponseWriter, r *http.Request) {
+	userID, err := s.getUserID(r)
+	if err != nil {
+		s.logger.Error("failed to get user id", zap.Error(err))
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	userData, err := s.storageService.GetUserAuthInfoByID(userID)
+	if err != nil {
+		s.logger.Error("failed to get user id", zap.Error(err))
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	if userData.State != storage.UserStateActive {
+		s.logger.Error("request from disabled user", zap.Error(err))
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	orders, err := s.storageService.GetOrders(r.Context(), userData.ID)
+	if err != nil {
+		s.logger.Error("get orders failed", zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	respData := make([]orderResponse, len(orders))
+	for i, e := range orders {
+		respData[i] = orderResponse{
+			Number:     strconv.FormatInt(e.ID, 10),
+			Status:     e.Status,
+			Accrual:    e.Accrual,
+			UploadedAt: e.UploadedAt,
+		}
+	}
+
+	s.apiWriteResponse(w, http.StatusOK, respData)
+}
+
 func (s *MartServer) apiParseRequest(r *http.Request, body interface{}) error {
 	if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
 		s.logger.Error("bad content type", zap.String("content_type", contentType))
@@ -119,6 +161,22 @@ func (s *MartServer) apiParseRequest(r *http.Request, body interface{}) error {
 	}
 
 	return nil
+}
+
+func (s *MartServer) apiWriteResponse(w http.ResponseWriter, statusCode int, response interface{}) {
+	dst, err := json.Marshal(response)
+	if err != nil {
+		s.logger.Error("failed to marshal response", zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	if _, err := w.Write(dst); err != nil {
+		s.logger.Error("failed to write response body", zap.Error(err))
+	}
 }
 
 func (s *MartServer) getUserID(r *http.Request) (int64, error) {
@@ -146,4 +204,11 @@ func (s *MartServer) getUserID(r *http.Request) (int64, error) {
 	}
 
 	return 0, ErrMissedJWTKey
+}
+
+type orderResponse struct {
+	Number     string    `json:"number"`
+	Status     string    `json:"status"`
+	Accrual    int64     `json:"accrual,omitempty"`
+	UploadedAt time.Time `json:"uploaded_at"`
 }

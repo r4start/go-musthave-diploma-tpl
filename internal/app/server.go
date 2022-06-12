@@ -48,6 +48,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 		r.Use(jwtauth.Authenticator)
 
 		r.Post("/api/user/orders", martServer.apiAddUserOrder)
+		r.Get("/api/user/orders", martServer.apiGetUserOrders)
 	})
 
 	server := &http.Server{Addr: serverAddress, Handler: r}

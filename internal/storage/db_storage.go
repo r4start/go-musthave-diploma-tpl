@@ -29,11 +29,16 @@ const (
 	GetUserQuery     = `select id, name, secret from users where name = $1 and flags = 'active';`
 	GetUserByIDQuery = `select name, secret from users where id = $1 and flags = 'active';`
 
+	CreateOrderStatusEnum = `create type order_status as enum ('NEW', 'PROCESSING', 'INVALID', 'PROCESSED');`
+
 	CreateOrdersTableScheme = `
        create table orders (
 			id bigserial primary key,
 			number bigint not null unique,
 			user_id bigint not null,
+            status order_status not null default 'NEW',
+			accrual bigint not null default 0,
+			uploaded_at timestamptz not null default now(),
 			updated_at timestamptz not null default now(),
 
 			FOREIGN KEY (user_id)
@@ -42,8 +47,9 @@ const (
 
 	CheckOrdersTable = `select count(*) from orders;`
 
-	AddOrder     = `insert into orders (number, user_id) values ($1, $2);`
-	GetOrderUser = `select user_id from orders where number = $1;`
+	AddOrder      = `insert into orders (number, user_id) values ($1, $2);`
+	GetOrderUser  = `select user_id from orders where number = $1;`
+	GetUserOrders = `select number, status, accrual, uploaded_at from orders where user_id = $1;`
 
 	DatabaseOperationTimeout = 500000 * time.Second
 
@@ -199,7 +205,31 @@ func (p *pgxStorage) AddOrder(ctx context.Context, userID, orderID int64) error 
 }
 
 func (p *pgxStorage) GetOrders(ctx context.Context, userID int64) ([]Order, error) {
-	return nil, nil
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	r, err := p.dbConn.Query(opCtx, GetUserOrders, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+
+	defer r.Close()
+
+	orders := make([]Order, 0)
+	for r.Next() {
+		order := Order{}
+		if err := r.Scan(&order.ID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, nil
 }
 
 func prepareUsersTable(ctx context.Context, conn *pgxpool.Pool) error {
@@ -241,7 +271,16 @@ func prepareOrdersTable(ctx context.Context, conn *pgxpool.Pool) error {
 		return r.Err()
 	}
 
-	r, err := conn.Query(ctx, CreateOrdersTableScheme)
+	r, err := conn.Query(ctx, CreateOrderStatusEnum)
+	if err != nil {
+		return err
+	}
+	if r.Err() != nil {
+		return err
+	}
+	r.Close()
+
+	r, err = conn.Query(ctx, CreateOrdersTableScheme)
 	if err != nil {
 		return err
 	}
