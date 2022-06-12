@@ -116,7 +116,36 @@ func (s *MartServer) apiGetUserOrders(w http.ResponseWriter, r *http.Request) {
 	s.apiWriteResponse(w, http.StatusOK, respData)
 }
 
-func (s *MartServer) apiGetUserWithdrawals(w http.ResponseWriter, r *http.Request) {}
+func (s *MartServer) apiGetUserWithdrawals(w http.ResponseWriter, r *http.Request) {
+	userData := s.getUserAuth(r)
+	if userData == nil {
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	ws, err := s.storageService.GetWithdrawals(r.Context(), userData.ID)
+	if err != nil {
+		s.logger.Error("failed to get withdrawals", zap.Int64("user_id", userData.ID), zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	if len(ws) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	responseData := make([]withdrawalsResponse, len(ws))
+	for i, e := range ws {
+		responseData[i] = withdrawalsResponse{
+			Order:       strconv.FormatInt(e.Order, 10),
+			Sum:         e.Sum,
+			ProcessedAt: e.ProcessedAt,
+		}
+	}
+
+	s.apiWriteResponse(w, http.StatusOK, responseData)
+}
 
 func (s *MartServer) apiGetUserBalance(w http.ResponseWriter, r *http.Request) {
 	userData := s.getUserAuth(r)
@@ -224,4 +253,10 @@ type orderResponse struct {
 	Status     string    `json:"status"`
 	Accrual    int64     `json:"accrual,omitempty"`
 	UploadedAt time.Time `json:"uploaded_at"`
+}
+
+type withdrawalsResponse struct {
+	Order       string    `json:"order"`
+	Sum         int64     `json:"sum"`
+	ProcessedAt time.Time `json:"processed_at"`
 }

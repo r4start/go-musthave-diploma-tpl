@@ -70,7 +70,8 @@ const (
 			id bigserial primary key,
 			number bigint not null,
 			user_id bigint not null,
-			updated_at timestamptz not null default now(),
+			sum bigint not null,
+			processed_at timestamptz not null default now(),
 
 			FOREIGN KEY (user_id)
       			REFERENCES users(id),
@@ -80,6 +81,7 @@ const (
 		);`
 
 	CheckWithdrawalTable = `select count(*) from withdrawal;`
+	GetUserWithdrawals   = `select number, sum, processed_at from withdrawal where user_id = $1;`
 
 	DatabaseOperationTimeout = 500000 * time.Second
 
@@ -301,7 +303,31 @@ func (p *pgxStorage) GetBalance(ctx context.Context, userID int64) (*BalanceInfo
 }
 
 func (p *pgxStorage) GetWithdrawals(ctx context.Context, userID int64) ([]Withdrawal, error) {
-	return nil, nil
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	r, err := p.dbConn.Query(opCtx, GetUserWithdrawals, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+
+	defer r.Close()
+
+	ws := make([]Withdrawal, 0)
+	for r.Next() {
+		w := Withdrawal{}
+		if err := r.Scan(&w.Order, &w.Sum, &w.ProcessedAt); err != nil {
+			return nil, err
+		}
+		ws = append(ws, w)
+	}
+
+	return ws, nil
 }
 
 func prepareUsersTable(ctx context.Context, conn *pgxpool.Pool) error {
