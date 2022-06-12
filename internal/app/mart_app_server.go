@@ -16,6 +16,7 @@ import (
 type StorageServices struct {
 	storage.UserStorage
 	storage.OrderStorage
+	storage.WithdrawalStorage
 }
 
 type MartServer struct {
@@ -50,22 +51,8 @@ func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := s.getUserID(r)
-	if err != nil {
-		s.logger.Error("failed to get user id", zap.Error(err))
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
-
-	userData, err := s.storageService.GetUserAuthInfoByID(userID)
-	if err != nil {
-		s.logger.Error("failed to get user id", zap.Error(err))
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
-
-	if userData.State != storage.UserStateActive {
-		s.logger.Error("request from disabled user", zap.Error(err))
+	userData := s.getUserAuth(r)
+	if userData == nil {
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
@@ -103,22 +90,8 @@ func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *MartServer) apiGetUserOrders(w http.ResponseWriter, r *http.Request) {
-	userID, err := s.getUserID(r)
-	if err != nil {
-		s.logger.Error("failed to get user id", zap.Error(err))
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
-
-	userData, err := s.storageService.GetUserAuthInfoByID(userID)
-	if err != nil {
-		s.logger.Error("failed to get user id", zap.Error(err))
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
-
-	if userData.State != storage.UserStateActive {
-		s.logger.Error("request from disabled user", zap.Error(err))
+	userData := s.getUserAuth(r)
+	if userData == nil {
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
@@ -141,6 +114,25 @@ func (s *MartServer) apiGetUserOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.apiWriteResponse(w, http.StatusOK, respData)
+}
+
+func (s *MartServer) apiGetUserWithdrawals(w http.ResponseWriter, r *http.Request) {}
+
+func (s *MartServer) apiGetUserBalance(w http.ResponseWriter, r *http.Request) {
+	userData := s.getUserAuth(r)
+	if userData == nil {
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	balance, err := s.storageService.GetBalance(r.Context(), userData.ID)
+	if err != nil {
+		s.logger.Error("failed to get balance", zap.Int64("user_id", userData.ID), zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	s.apiWriteResponse(w, http.StatusOK, balance)
 }
 
 func (s *MartServer) apiParseRequest(r *http.Request, body interface{}) error {
@@ -177,6 +169,27 @@ func (s *MartServer) apiWriteResponse(w http.ResponseWriter, statusCode int, res
 	if _, err := w.Write(dst); err != nil {
 		s.logger.Error("failed to write response body", zap.Error(err))
 	}
+}
+
+func (s *MartServer) getUserAuth(r *http.Request) *storage.UserAuthorization {
+	userID, err := s.getUserID(r)
+	if err != nil {
+		s.logger.Error("failed to get user id", zap.Error(err))
+		return nil
+	}
+
+	userData, err := s.storageService.GetUserAuthInfoByID(userID)
+	if err != nil {
+		s.logger.Error("failed to get user id", zap.Error(err))
+		return nil
+	}
+
+	if userData.State != storage.UserStateActive {
+		s.logger.Error("request from disabled user", zap.Int64("user_id", userData.ID))
+		return nil
+	}
+
+	return userData
 }
 
 func (s *MartServer) getUserID(r *http.Request) (int64, error) {

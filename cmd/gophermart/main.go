@@ -49,7 +49,7 @@ func main() {
 	storageCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	userStorage, ordersStorage, err := storage.NewDatabaseStorage(storageCtx, dbConn)
+	userStorage, ordersStorage, withdrawalStorage, err := storage.NewDatabaseStorage(storageCtx, dbConn)
 	if err != nil {
 		logger.Fatal("Failed to initialize storage", zap.Error(err))
 	}
@@ -58,7 +58,8 @@ func main() {
 	defer cancel()
 
 	app.RunServerApp(serverCtx, cfg.ServerAddress, logger, app.StorageServices{
-		UserStorage:  userStorage,
-		OrderStorage: ordersStorage,
+		UserStorage:       userStorage,
+		OrderStorage:      ordersStorage,
+		WithdrawalStorage: withdrawalStorage,
 	})
 }
