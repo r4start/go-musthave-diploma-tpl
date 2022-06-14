@@ -114,18 +114,12 @@ const (
 	UniqueViolationCode = "23505"
 )
 
-type StorageServices struct {
-	UserStorage
-	OrderStorage
-	WithdrawalStorage
-}
-
 type pgxStorage struct {
 	ctx    context.Context
 	dbConn *pgxpool.Pool
 }
 
-func NewDatabaseStorage(ctx context.Context, connection *pgxpool.Pool) (*StorageServices, error) {
+func NewDatabaseStorage(ctx context.Context, connection *pgxpool.Pool) (AppStorage, error) {
 	if err := connection.Ping(ctx); err != nil {
 		return nil, err
 	}
@@ -150,11 +144,7 @@ func NewDatabaseStorage(ctx context.Context, connection *pgxpool.Pool) (*Storage
 		ctx:    ctx,
 		dbConn: connection,
 	}
-	return &StorageServices{
-		UserStorage:       storage,
-		OrderStorage:      storage,
-		WithdrawalStorage: storage,
-	}, nil
+	return storage, nil
 }
 
 func (p *pgxStorage) AddUser(ctx context.Context, auth *UserAuthorization) error {

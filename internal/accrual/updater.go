@@ -28,8 +28,7 @@ type Config struct {
 	BaseAddr  string
 	UpdateRPS int
 	Logger    *zap.Logger
-	storage.OrderStorage
-	storage.WithdrawalStorage
+	storage.AppStorage
 }
 
 type Updater struct {

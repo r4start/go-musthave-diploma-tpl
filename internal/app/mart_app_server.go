@@ -16,11 +16,11 @@ import (
 type MartServer struct {
 	ctx            context.Context
 	logger         *zap.Logger
-	storageService *storage.StorageServices
+	storageService storage.AppStorage
 	authorizer     *jwtauth.JWTAuth
 }
 
-func NewAppServer(ctx context.Context, logger *zap.Logger, storage *storage.StorageServices, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
+func NewAppServer(ctx context.Context, logger *zap.Logger, storage storage.AppStorage, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
 	server := &MartServer{
 		ctx:            ctx,
 		logger:         logger,

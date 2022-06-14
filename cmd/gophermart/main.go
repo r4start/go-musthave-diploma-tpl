@@ -62,11 +62,10 @@ func main() {
 	defer cancel()
 
 	accCfg := accrual.Config{
-		BaseAddr:          cfg.AccrualSystemAddress,
-		UpdateRPS:         10,
-		Logger:            logger,
-		OrderStorage:      st.OrderStorage,
-		WithdrawalStorage: st.WithdrawalStorage,
+		BaseAddr:   cfg.AccrualSystemAddress,
+		UpdateRPS:  10,
+		Logger:     logger,
+		AppStorage: st,
 	}
 	updater := accrual.NewUpdater(updaterCtx, accCfg)
 	defer updater.Stop()

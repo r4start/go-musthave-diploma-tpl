@@ -6,11 +6,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/jwtauth"
+	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"net/http"
 )
 
-func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger, st StorageServices) {
+func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger, st storage.AppStorage) {
 	privateKey := make([]byte, 32)
 	readBytes, err := rand.Read(privateKey)
 	if err != nil || readBytes != len(privateKey) {
@@ -19,7 +20,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 
 	authorizer := jwtauth.New("HS256", privateKey, nil)
 
-	authServer, err := NewAuthServer(ctx, logger, st.UserStorage, authorizer)
+	authServer, err := NewAuthServer(ctx, logger, st, authorizer)
 	if err != nil {
 		logger.Fatal("Failed to initialize auth server", zap.Error(err))
 	}

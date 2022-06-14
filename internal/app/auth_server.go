@@ -21,11 +21,11 @@ type userAuthRequest struct {
 type AuthServer struct {
 	ctx         context.Context
 	logger      *zap.Logger
-	userStorage storage.UserStorage
+	userStorage storage.AppStorage
 	authorizer  *jwtauth.JWTAuth
 }
 
-func NewAuthServer(ctx context.Context, logger *zap.Logger, userStorage storage.UserStorage, authorizer *jwtauth.JWTAuth) (*AuthServer, error) {
+func NewAuthServer(ctx context.Context, logger *zap.Logger, userStorage storage.AppStorage, authorizer *jwtauth.JWTAuth) (*AuthServer, error) {
 	server := &AuthServer{
 		ctx:         ctx,
 		logger:      logger,
