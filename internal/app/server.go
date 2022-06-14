@@ -9,6 +9,7 @@ import (
 	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"net/http"
+	"time"
 )
 
 func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger, st storage.AppStorage) {
@@ -25,7 +26,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 		logger.Fatal("Failed to initialize auth server", zap.Error(err))
 	}
 
-	martServer, err := NewAppServer(ctx, logger, st, authorizer)
+	martServer, err := NewAppServer(ctx, logger, st)
 	if err != nil {
 		logger.Fatal("Failed to initialize app server", zap.Error(err))
 	}
@@ -34,6 +35,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 	r.Use(middleware.NoCache)
 	r.Use(middleware.Compress(CompressionLevel))
 	r.Use(DecompressGzip)
+	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusBadRequest)
@@ -47,6 +49,7 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 	r.Group(func(r chi.Router) {
 		r.Use(jwtauth.Verifier(authorizer))
 		r.Use(jwtauth.Authenticator)
+		r.Use(AppAuthorization(st))
 
 		r.Post("/api/user/orders", martServer.apiAddUserOrder)
 		r.Get("/api/user/orders", martServer.apiGetUserOrders)

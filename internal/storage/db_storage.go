@@ -109,7 +109,7 @@ const (
 			execute procedure function_create_user_relations();
 	`
 
-	DatabaseOperationTimeout = 500000 * time.Second
+	DatabaseOperationTimeout = 15 * time.Second
 
 	UniqueViolationCode = "23505"
 )

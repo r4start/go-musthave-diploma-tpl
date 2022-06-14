@@ -2,8 +2,13 @@ package app
 
 import (
 	"compress/gzip"
+	"context"
+	"github.com/go-chi/jwtauth"
+	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"net/http"
 )
+
+var UserAuthDataCtxKey = &contextKey{"UserAuthData"}
 
 type gzipBodyReader struct {
 	gzipReader *gzip.Reader
@@ -29,4 +34,55 @@ func DecompressGzip(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func AppAuthorization(st storage.AppStorage) func(handler http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		authFn := func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			_, claims, err := jwtauth.FromContext(ctx)
+			if err != nil {
+				http.Error(w, "", http.StatusUnauthorized)
+				return
+			}
+			userID := int64(0)
+			if id, exists := claims["id"]; exists {
+				switch value := id.(type) {
+				case int:
+					userID = int64(value)
+				case int64:
+					userID = value
+				case float64:
+					userID = int64(value)
+				default:
+					http.Error(w, "", http.StatusUnauthorized)
+					return
+				}
+			}
+
+			userData, err := st.GetUserAuthInfoByID(ctx, userID)
+			if err != nil {
+				http.Error(w, "", http.StatusUnauthorized)
+				return
+			}
+
+			if userData.State != storage.UserStateActive {
+				http.Error(w, "", http.StatusUnauthorized)
+				return
+			}
+
+			ctx = context.WithValue(ctx, UserAuthDataCtxKey, userData)
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		}
+		return http.HandlerFunc(authFn)
+	}
+}
+
+type contextKey struct {
+	name string
+}
+
+func (k *contextKey) String() string {
+	return "marketappauth context value " + k.name
 }

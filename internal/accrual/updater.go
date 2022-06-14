@@ -128,12 +128,10 @@ func (u *Updater) update() {
 		}
 
 		switch info.Status {
-		case StatusRegistered:
+		case StatusRegistered, StatusProcessing:
 			orders[i].Status = storage.StatusProcessing
 		case StatusInvalid:
 			orders[i].Status = storage.StatusInvalid
-		case StatusProcessing:
-			orders[i].Status = storage.StatusProcessing
 		case StatusProcessed:
 			orders[i].Status = storage.StatusProcessed
 			orders[i].Accrual = info.Accrual

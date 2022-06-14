@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/go-chi/jwtauth"
 	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"io"
@@ -17,15 +16,13 @@ type MartServer struct {
 	ctx            context.Context
 	logger         *zap.Logger
 	storageService storage.AppStorage
-	authorizer     *jwtauth.JWTAuth
 }
 
-func NewAppServer(ctx context.Context, logger *zap.Logger, storage storage.AppStorage, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
+func NewAppServer(ctx context.Context, logger *zap.Logger, storage storage.AppStorage) (*MartServer, error) {
 	server := &MartServer{
 		ctx:            ctx,
 		logger:         logger,
 		storageService: storage,
-		authorizer:     authorizer,
 	}
 
 	return server, nil
@@ -45,12 +42,6 @@ func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userData := s.getUserAuth(r)
-	if userData == nil {
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
-
 	if !IsValidLuhn(string(b)) {
 		s.logger.Error("bad order id", zap.String("order_id", string(b)))
 		http.Error(w, "", http.StatusUnprocessableEntity)
@@ -63,6 +54,8 @@ func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
+
+	userData := r.Context().Value(UserAuthDataCtxKey).(*storage.UserAuthorization)
 
 	if err := s.storageService.AddOrder(r.Context(), userData.ID, orderID); err != nil {
 		if errors.Is(err, storage.ErrDuplicateOrder) {
@@ -84,11 +77,7 @@ func (s *MartServer) apiAddUserOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *MartServer) apiGetUserOrders(w http.ResponseWriter, r *http.Request) {
-	userData := s.getUserAuth(r)
-	if userData == nil {
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
+	userData := r.Context().Value(UserAuthDataCtxKey).(*storage.UserAuthorization)
 
 	orders, err := s.storageService.GetOrders(r.Context(), userData.ID)
 	if err != nil {
@@ -111,11 +100,7 @@ func (s *MartServer) apiGetUserOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *MartServer) apiGetUserWithdrawals(w http.ResponseWriter, r *http.Request) {
-	userData := s.getUserAuth(r)
-	if userData == nil {
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
+	userData := r.Context().Value(UserAuthDataCtxKey).(*storage.UserAuthorization)
 
 	ws, err := s.storageService.GetWithdrawals(r.Context(), userData.ID)
 	if err != nil {
@@ -142,11 +127,7 @@ func (s *MartServer) apiGetUserWithdrawals(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *MartServer) apiGetUserBalance(w http.ResponseWriter, r *http.Request) {
-	userData := s.getUserAuth(r)
-	if userData == nil {
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
+	userData := r.Context().Value(UserAuthDataCtxKey).(*storage.UserAuthorization)
 
 	balance, err := s.storageService.GetBalance(r.Context(), userData.ID)
 	if err != nil {
@@ -159,11 +140,7 @@ func (s *MartServer) apiGetUserBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *MartServer) apiBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
-	userData := s.getUserAuth(r)
-	if userData == nil {
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	}
+	userData := r.Context().Value(UserAuthDataCtxKey).(*storage.UserAuthorization)
 
 	withdrawRequest := balanceWithdrawRequest{}
 	if err := s.apiParseRequest(r, &withdrawRequest); err != nil {
@@ -232,54 +209,6 @@ func (s *MartServer) apiWriteResponse(w http.ResponseWriter, statusCode int, res
 	if _, err := w.Write(dst); err != nil {
 		s.logger.Error("failed to write response body", zap.Error(err))
 	}
-}
-
-func (s *MartServer) getUserAuth(r *http.Request) *storage.UserAuthorization {
-	userID, err := s.getUserID(r)
-	if err != nil {
-		s.logger.Error("failed to get user id", zap.Error(err))
-		return nil
-	}
-
-	userData, err := s.storageService.GetUserAuthInfoByID(r.Context(), userID)
-	if err != nil {
-		s.logger.Error("failed to get user id", zap.Error(err))
-		return nil
-	}
-
-	if userData.State != storage.UserStateActive {
-		s.logger.Error("request from disabled user", zap.Int64("user_id", userData.ID))
-		return nil
-	}
-
-	return userData
-}
-
-func (s *MartServer) getUserID(r *http.Request) (int64, error) {
-	jwtCookie, err := r.Cookie(AuthCookie)
-	if err != nil {
-		return 0, err
-	}
-
-	token, err := s.authorizer.Decode(jwtCookie.Value)
-	if err != nil {
-		return 0, err
-	}
-
-	if id, exists := token.Get("id"); exists {
-		switch value := id.(type) {
-		case int:
-			return int64(value), nil
-		case int64:
-			return value, nil
-		case float64:
-			return int64(value), nil
-		default:
-			return 0, ErrJWTKeyBadFormat
-		}
-	}
-
-	return 0, ErrMissedJWTKey
 }
 
 type orderResponse struct {
