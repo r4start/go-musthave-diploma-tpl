@@ -42,6 +42,7 @@ const (
 
 			FOREIGN KEY (user_id)
       			REFERENCES users(id)
+                ON DELETE CASCADE
 		);`
 
 	CheckOrdersTable = `select count(*) from orders;`
@@ -62,6 +63,7 @@ const (
 
 			FOREIGN KEY (user_id)
       			REFERENCES users(id)
+				ON DELETE CASCADE
 		);`
 
 	CheckBalanceTable = `select count(*) from balance;`
@@ -79,11 +81,33 @@ const (
 
 			FOREIGN KEY (user_id)
       			REFERENCES users(id)
+				ON DELETE CASCADE
 		);`
 
 	CheckWithdrawalTable = `select count(*) from withdrawal;`
 	GetUserWithdrawals   = `select number, sum, processed_at from withdrawal where user_id = $1;`
 	AddWithdrawal        = `insert into withdrawal (number, user_id, sum) values ($1, $2, $3);`
+
+	CreateUserRelationsFunction = `
+		CREATE OR REPLACE FUNCTION function_create_user_relations() RETURNS TRIGGER AS
+			$BODY$
+			BEGIN
+				insert into
+					balance (user_id)
+					VALUES(new.id);
+			
+				RETURN new;
+			END;
+			$BODY$
+			language plpgsql;	
+	`
+
+	CreateUserRelationsTrigger = `
+		create trigger create_user_data
+			after insert on users
+			for each row
+			execute procedure function_create_user_relations();
+	`
 
 	DatabaseOperationTimeout = 500000 * time.Second
 
@@ -502,6 +526,18 @@ func prepareBalanceTable(ctx context.Context, conn *pgxpool.Pool) error {
 	}
 
 	r, err := conn.Query(ctx, CreateBalanceTableScheme)
+	if err != nil {
+		return err
+	}
+	r.Close()
+
+	r, err = conn.Query(ctx, CreateUserRelationsFunction)
+	if err != nil {
+		return err
+	}
+	r.Close()
+
+	r, err = conn.Query(ctx, CreateUserRelationsTrigger)
 	if err != nil {
 		return err
 	}
