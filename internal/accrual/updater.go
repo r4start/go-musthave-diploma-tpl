@@ -117,7 +117,7 @@ func (u *Updater) update() {
 func (u *Updater) getOrderStatus(orderID int64) (*orderInfo, error) {
 	request := u.client.R().SetContext(u.ctx)
 
-	url := fmt.Sprintf("%s/api/orders/%d", u.baseAddr, orderID)
+	url := fmt.Sprintf("http://%s/api/orders/%d", u.baseAddr, orderID)
 	response, err := request.Get(url)
 	if err != nil {
 		return nil, err
