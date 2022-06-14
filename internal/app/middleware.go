@@ -36,7 +36,7 @@ func DecompressGzip(next http.Handler) http.Handler {
 	})
 }
 
-func AppAuthorization(st storage.AppStorage) func(handler http.Handler) http.Handler {
+func AuthorizationVerifier(st storage.AppStorage) func(handler http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		authFn := func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()

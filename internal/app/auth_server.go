@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const AuthCookieName = "jwt"
+
 type userAuthRequest struct {
 	Login    string
 	Password string
@@ -68,7 +70,7 @@ func (s *AuthServer) apiUserRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cookie := http.Cookie{
-		Name:  AuthCookie,
+		Name:  AuthCookieName,
 		Value: value,
 		Path:  "/",
 	}
@@ -103,7 +105,7 @@ func (s *AuthServer) apiUserLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cookie := http.Cookie{
-		Name:  AuthCookie,
+		Name:  AuthCookieName,
 		Value: value,
 		Path:  "/",
 	}

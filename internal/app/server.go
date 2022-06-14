@@ -12,10 +12,16 @@ import (
 	"time"
 )
 
+const (
+	privateKeySize           = 32
+	compressionLevel         = 7
+	requestProcessingTimeout = 60 * time.Second
+)
+
 func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger, st storage.AppStorage) {
-	privateKey := make([]byte, 32)
+	privateKey := make([]byte, privateKeySize)
 	readBytes, err := rand.Read(privateKey)
-	if err != nil || readBytes != len(privateKey) {
+	if err != nil || readBytes != privateKeySize {
 		logger.Fatal("Failed to generate private key", zap.Error(err), zap.Int("generated_len", readBytes))
 	}
 
@@ -33,9 +39,9 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 
 	r := chi.NewRouter()
 	r.Use(middleware.NoCache)
-	r.Use(middleware.Compress(CompressionLevel))
+	r.Use(middleware.Compress(compressionLevel))
 	r.Use(DecompressGzip)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(requestProcessingTimeout))
 
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusBadRequest)
@@ -49,14 +55,18 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 	r.Group(func(r chi.Router) {
 		r.Use(jwtauth.Verifier(authorizer))
 		r.Use(jwtauth.Authenticator)
-		r.Use(AppAuthorization(st))
+		r.Use(AuthorizationVerifier(st))
 
-		r.Post("/api/user/orders", martServer.apiAddUserOrder)
-		r.Get("/api/user/orders", martServer.apiGetUserOrders)
+		r.Route("/api/user/orders", func(r chi.Router) {
+			r.Get("/", martServer.apiGetUserOrders)
+			r.Post("/", martServer.apiAddUserOrder)
+		})
 
-		r.Get("/api/user/balance", martServer.apiGetUserBalance)
-		r.Get("/api/user/balance/withdrawals", martServer.apiGetUserWithdrawals)
-		r.Post("/api/user/balance/withdraw", martServer.apiBalanceWithdraw)
+		r.Route("/api/user/balance", func(r chi.Router) {
+			r.Get("/", martServer.apiGetUserBalance)
+			r.Get("/withdrawals", martServer.apiGetUserWithdrawals)
+			r.Post("/withdraw", martServer.apiBalanceWithdraw)
+		})
 	})
 
 	server := &http.Server{Addr: serverAddress, Handler: r}
