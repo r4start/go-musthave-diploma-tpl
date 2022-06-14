@@ -43,7 +43,7 @@ func (s *AuthServer) apiUserRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.userStorage.AddUser(&storage.UserAuthorization{
+	if err := s.userStorage.AddUser(r.Context(), &storage.UserAuthorization{
 		UserName: authData.Login,
 		Secret:   []byte(authData.Password),
 	}); err != nil {
@@ -55,7 +55,7 @@ func (s *AuthServer) apiUserRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userData, err := s.userStorage.GetUserAuthInfo(authData.Login)
+	userData, err := s.userStorage.GetUserAuthInfo(r.Context(), authData.Login)
 	if err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
@@ -84,7 +84,7 @@ func (s *AuthServer) apiUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbUserData, err := s.userStorage.GetUserAuthInfo(authData.Login)
+	dbUserData, err := s.userStorage.GetUserAuthInfo(r.Context(), authData.Login)
 	if err != nil {
 		s.logger.Error("Failed to get user info from DB", zap.Error(err))
 		http.Error(w, "", http.StatusUnauthorized)

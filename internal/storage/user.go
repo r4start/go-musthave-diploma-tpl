@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 )
 
@@ -22,7 +23,7 @@ type UserAuthorization struct {
 }
 
 type UserStorage interface {
-	AddUser(auth *UserAuthorization) error
-	GetUserAuthInfo(userName string) (*UserAuthorization, error)
-	GetUserAuthInfoByID(userID int64) (*UserAuthorization, error)
+	AddUser(ctx context.Context, auth *UserAuthorization) error
+	GetUserAuthInfo(ctx context.Context, userName string) (*UserAuthorization, error)
+	GetUserAuthInfoByID(ctx context.Context, userID int64) (*UserAuthorization, error)
 }

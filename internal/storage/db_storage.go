@@ -114,41 +114,51 @@ const (
 	UniqueViolationCode = "23505"
 )
 
+type StorageServices struct {
+	UserStorage
+	OrderStorage
+	WithdrawalStorage
+}
+
 type pgxStorage struct {
 	ctx    context.Context
 	dbConn *pgxpool.Pool
 }
 
-func NewDatabaseStorage(ctx context.Context, connection *pgxpool.Pool) (UserStorage, OrderStorage, WithdrawalStorage, error) {
+func NewDatabaseStorage(ctx context.Context, connection *pgxpool.Pool) (*StorageServices, error) {
 	if err := connection.Ping(ctx); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	if err := prepareUsersTable(ctx, connection); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	if err := prepareOrdersTable(ctx, connection); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	if err := prepareBalanceTable(ctx, connection); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	if err := prepareWithdrawalTable(ctx, connection); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	storage := &pgxStorage{
 		ctx:    ctx,
 		dbConn: connection,
 	}
-	return storage, storage, storage, nil
+	return &StorageServices{
+		UserStorage:       storage,
+		OrderStorage:      storage,
+		WithdrawalStorage: storage,
+	}, nil
 }
 
-func (p *pgxStorage) AddUser(auth *UserAuthorization) error {
-	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+func (p *pgxStorage) AddUser(ctx context.Context, auth *UserAuthorization) error {
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
 	defer cancel()
 
 	tx, err := p.dbConn.Begin(opCtx)
@@ -171,8 +181,8 @@ func (p *pgxStorage) AddUser(auth *UserAuthorization) error {
 	return tx.Commit(opCtx)
 }
 
-func (p *pgxStorage) GetUserAuthInfo(userName string) (*UserAuthorization, error) {
-	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+func (p *pgxStorage) GetUserAuthInfo(ctx context.Context, userName string) (*UserAuthorization, error) {
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
 	defer cancel()
 
 	r, err := p.dbConn.Query(opCtx, GetUserQuery, userName)
@@ -199,8 +209,8 @@ func (p *pgxStorage) GetUserAuthInfo(userName string) (*UserAuthorization, error
 	return nil, ErrNoSuchUser
 }
 
-func (p *pgxStorage) GetUserAuthInfoByID(userID int64) (*UserAuthorization, error) {
-	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+func (p *pgxStorage) GetUserAuthInfoByID(ctx context.Context, userID int64) (*UserAuthorization, error) {
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
 	defer cancel()
 
 	r, err := p.dbConn.Query(opCtx, GetUserByIDQuery, userID)

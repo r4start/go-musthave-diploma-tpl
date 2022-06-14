@@ -13,20 +13,14 @@ import (
 	"time"
 )
 
-type StorageServices struct {
-	storage.UserStorage
-	storage.OrderStorage
-	storage.WithdrawalStorage
-}
-
 type MartServer struct {
 	ctx            context.Context
 	logger         *zap.Logger
-	storageService StorageServices
+	storageService *storage.StorageServices
 	authorizer     *jwtauth.JWTAuth
 }
 
-func NewAppServer(ctx context.Context, logger *zap.Logger, storage StorageServices, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
+func NewAppServer(ctx context.Context, logger *zap.Logger, storage *storage.StorageServices, authorizer *jwtauth.JWTAuth) (*MartServer, error) {
 	server := &MartServer{
 		ctx:            ctx,
 		logger:         logger,
@@ -247,7 +241,7 @@ func (s *MartServer) getUserAuth(r *http.Request) *storage.UserAuthorization {
 		return nil
 	}
 
-	userData, err := s.storageService.GetUserAuthInfoByID(userID)
+	userData, err := s.storageService.GetUserAuthInfoByID(r.Context(), userID)
 	if err != nil {
 		s.logger.Error("failed to get user id", zap.Error(err))
 		return nil

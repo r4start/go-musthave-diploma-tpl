@@ -50,7 +50,7 @@ func main() {
 	storageCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	userStorage, ordersStorage, withdrawalStorage, err := storage.NewDatabaseStorage(storageCtx, dbConn)
+	st, err := storage.NewDatabaseStorage(storageCtx, dbConn)
 	if err != nil {
 		logger.Fatal("Failed to initialize storage", zap.Error(err))
 	}
@@ -58,17 +58,18 @@ func main() {
 	serverCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	storageServices := app.StorageServices{
-		UserStorage:       userStorage,
-		OrderStorage:      ordersStorage,
-		WithdrawalStorage: withdrawalStorage,
-	}
-
 	updaterCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	updater := accrual.NewUpdater(updaterCtx, cfg.AccrualSystemAddress, 10, storageServices, logger)
+	accCfg := accrual.Config{
+		BaseAddr:          cfg.AccrualSystemAddress,
+		UpdateRPS:         10,
+		Logger:            logger,
+		OrderStorage:      st.OrderStorage,
+		WithdrawalStorage: st.WithdrawalStorage,
+	}
+	updater := accrual.NewUpdater(updaterCtx, accCfg)
 	defer updater.Stop()
 
-	app.RunServerApp(serverCtx, cfg.ServerAddress, logger, storageServices)
+	app.RunServerApp(serverCtx, cfg.ServerAddress, logger, st)
 }
