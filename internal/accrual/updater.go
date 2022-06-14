@@ -6,9 +6,17 @@ import (
 	"fmt"
 	"github.com/go-resty/resty/v2"
 	"github.com/r4start/go-musthave-diploma-tpl/internal/app"
+	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"net/http"
 	"time"
+)
+
+const (
+	StatusRegistered = "REGISTERED"
+	StatusInvalid    = "INVALID"
+	StatusProcessing = "PROCESSING"
+	StatusProcessed  = "PROCESSED"
 )
 
 type orderInfo struct {
@@ -80,11 +88,28 @@ func (u *Updater) update() {
 			continue
 		}
 
-		if o.Status != info.Status || o.Accrual != info.Accrual {
-			o.Status = info.Status
+		u.logger.Info("got info", zap.Int64("order_id", o.ID), zap.Float64("accrual", info.Accrual), zap.String("status", info.Status))
+
+		switch info.Status {
+		case StatusRegistered:
+			o.Status = storage.StatusProcessing
+		case StatusInvalid:
+			o.Status = storage.StatusInvalid
+		case StatusProcessing:
+			o.Status = storage.StatusProcessing
+		case StatusProcessed:
+			o.Status = storage.StatusProcessed
 			o.Accrual = info.Accrual
-			if err := u.storage.UpdateOrder(u.ctx, o); err != nil {
-				u.logger.Error("failed to update order", zap.Int64("order_id", o.ID), zap.Error(err))
+		}
+
+		if err := u.storage.UpdateOrder(u.ctx, o); err != nil {
+			u.logger.Error("failed to update order", zap.Int64("order_id", o.ID), zap.Error(err))
+			continue
+		}
+
+		if info.Status == storage.StatusProcessed {
+			if err := u.storage.AddBalance(u.ctx, o.UserID, o.Accrual); err != nil {
+				u.logger.Error("failed to update user balance", zap.Int64("user_id", o.UserID), zap.Error(err))
 			}
 		}
 	}

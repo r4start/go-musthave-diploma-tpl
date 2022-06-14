@@ -50,7 +50,7 @@ const (
 	UpdateOrder         = `update orders set status=$1, accrual=$2, updated_at=now() where number=$3;`
 	GetOrderUser        = `select user_id from orders where number = $1;`
 	GetUserOrders       = `select number, status, accrual, uploaded_at from orders where user_id = $1;`
-	GetUnfinishedOrders = `select number, status, accrual, uploaded_at from orders where status in ('NEW', 'PROCESSING');`
+	GetUnfinishedOrders = `select number, user_id, status, accrual, uploaded_at from orders where status in ('NEW', 'PROCESSING');`
 
 	CreateBalanceTableScheme = `
        create table balance (
@@ -67,6 +67,7 @@ const (
 	CheckBalanceTable = `select count(*) from balance;`
 	GetUserBalance    = `select current, withdrawn from balance where user_id = $1;`
 	SetBalance        = `update balance set current = current-$1, withdrawn=withdrawn+$1 where user_id=$2;`
+	AddBalance        = `update balance set current = current+$1 where user_id=$2;`
 
 	CreateWithdrawalTableScheme = `
        create table withdrawal (
@@ -281,7 +282,9 @@ func (p *pgxStorage) GetOrders(ctx context.Context, userID int64) ([]Order, erro
 
 	orders := make([]Order, 0)
 	for r.Next() {
-		order := Order{}
+		order := Order{
+			UserID: userID,
+		}
 		if err := r.Scan(&order.ID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
 			return nil, err
 		}
@@ -310,7 +313,7 @@ func (p *pgxStorage) GetUnfinishedOrders(ctx context.Context) ([]Order, error) {
 	orders := make([]Order, 0)
 	for r.Next() {
 		order := Order{}
-		if err := r.Scan(&order.ID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
+		if err := r.Scan(&order.ID, &order.UserID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
 			return nil, err
 		}
 		orders = append(orders, order)
@@ -361,6 +364,23 @@ func (p *pgxStorage) Withdraw(ctx context.Context, userID, order int64, sum floa
 		return err
 	}
 
+	return tx.Commit(opCtx)
+}
+
+func (p *pgxStorage) AddBalance(ctx context.Context, userID int64, amount float64) error {
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	tx, err := p.dbConn.Begin(opCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(p.ctx)
+
+	_, err = tx.Exec(opCtx, AddBalance, amount, userID)
+	if err != nil {
+		return err
+	}
 	return tx.Commit(opCtx)
 }
 

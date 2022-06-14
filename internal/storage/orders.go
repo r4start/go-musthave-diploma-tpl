@@ -12,7 +12,7 @@ var (
 )
 
 const (
-	StatusRegistered = "REGISTERED"
+	StatusNew        = "NEW"
 	StatusInvalid    = "INVALID"
 	StatusProcessing = "PROCESSING"
 	StatusProcessed  = "PROCESSED"
@@ -20,6 +20,7 @@ const (
 
 type Order struct {
 	ID         int64
+	UserID     int64
 	Status     string
 	Accrual    float64
 	UploadedAt time.Time
