@@ -50,8 +50,8 @@ func RunServerApp(ctx context.Context, serverAddress string, logger *zap.Logger,
 		r.Post("/api/user/orders", martServer.apiAddUserOrder)
 		r.Get("/api/user/orders", martServer.apiGetUserOrders)
 
-		r.Get("/api/user/withdrawals", martServer.apiGetUserWithdrawals)
 		r.Get("/api/user/balance", martServer.apiGetUserBalance)
+		r.Get("/api/user/balance/withdrawals", martServer.apiGetUserWithdrawals)
 		r.Post("/api/user/balance/withdraw", martServer.apiBalanceWithdraw)
 	})
 

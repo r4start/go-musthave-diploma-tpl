@@ -59,6 +59,7 @@ func (u *Updater) Stop() {
 
 func (u *Updater) updateOrders() {
 	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -87,8 +88,6 @@ func (u *Updater) update() {
 			u.logger.Error("failed to get order info", zap.Int64("order_id", o.ID), zap.Error(err))
 			continue
 		}
-
-		u.logger.Info("got info", zap.Int64("order_id", o.ID), zap.Float64("accrual", info.Accrual), zap.String("status", info.Status))
 
 		switch info.Status {
 		case StatusRegistered:
