@@ -57,6 +57,7 @@ type AppStorage interface {
 
 	Withdraw(ctx context.Context, userID, order int64, sum float64) error
 	AddBalance(ctx context.Context, userID int64, amount float64) error
+	UpdateBalanceFromOrders(ctx context.Context, orders []Order) error
 	GetBalance(ctx context.Context, userID int64) (*BalanceInfo, error)
 	GetWithdrawals(ctx context.Context, userID int64) ([]Withdrawal, error)
 

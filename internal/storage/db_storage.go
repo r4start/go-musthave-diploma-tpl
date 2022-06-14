@@ -407,6 +407,40 @@ func (p *pgxStorage) AddBalance(ctx context.Context, userID int64, amount float6
 	if err != nil {
 		return err
 	}
+
+	return tx.Commit(opCtx)
+}
+
+func (p *pgxStorage) UpdateBalanceFromOrders(ctx context.Context, orders []Order) error {
+	if len(orders) == 0 {
+		return nil
+	}
+
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	tx, err := p.dbConn.Begin(opCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(p.ctx)
+
+	totalAmount := make(map[int64]float64)
+	for _, o := range orders {
+		_, err = tx.Exec(opCtx, UpdateOrder, o.Status, o.Accrual, o.ID)
+		if err != nil {
+			return err
+		}
+		totalAmount[o.UserID] += o.Accrual
+	}
+
+	for id, amount := range totalAmount {
+		_, err = tx.Exec(opCtx, AddBalance, amount, id)
+		if err != nil {
+			return err
+		}
+	}
+
 	return tx.Commit(opCtx)
 }
 

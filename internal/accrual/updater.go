@@ -84,6 +84,7 @@ func (u *Updater) update() {
 		return
 	}
 
+	ordersWithBalanceUpdate := make([]storage.Order, 0)
 	for _, o := range orders {
 		info, err := u.getOrderStatus(o.ID)
 		if err != nil {
@@ -103,16 +104,18 @@ func (u *Updater) update() {
 			o.Accrual = info.Accrual
 		}
 
-		if err := u.UpdateOrder(u.ctx, o); err != nil {
-			u.Logger.Error("failed to update order", zap.Int64("order_id", o.ID), zap.Error(err))
+		if info.Status == storage.StatusProcessed {
+			ordersWithBalanceUpdate = append(ordersWithBalanceUpdate, o)
 			continue
 		}
 
-		if info.Status == storage.StatusProcessed {
-			if err := u.AddBalance(u.ctx, o.UserID, o.Accrual); err != nil {
-				u.Logger.Error("failed to update user balance", zap.Int64("user_id", o.UserID), zap.Error(err))
-			}
+		if err := u.UpdateOrder(u.ctx, o); err != nil {
+			u.Logger.Error("failed to update order", zap.Int64("order_id", o.ID), zap.Error(err))
 		}
+	}
+
+	if err := u.UpdateBalanceFromOrders(u.ctx, ordersWithBalanceUpdate); err != nil {
+		u.Logger.Error("failed to update user balance", zap.Error(err))
 	}
 }
 
