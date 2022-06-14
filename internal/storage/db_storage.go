@@ -216,7 +216,7 @@ func (p *pgxStorage) AddOrder(ctx context.Context, userID, orderID int64) error 
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			if pgErr.Code == UniqueViolationCode && pgErr.ConstraintName == "orders_number_key" {
+			if pgErr.Code == UniqueViolationCode && pgErr.ConstraintName == "orders_pkey" {
 				r, err := p.dbConn.Query(opCtx, GetOrderUser, orderID)
 				if err != nil {
 					return err

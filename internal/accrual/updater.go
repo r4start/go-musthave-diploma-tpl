@@ -77,6 +77,7 @@ func (u *Updater) update() {
 		info, err := u.getOrderStatus(o.ID)
 		if err != nil {
 			u.logger.Error("failed to get order info", zap.Int64("order_id", o.ID), zap.Error(err))
+			continue
 		}
 
 		if o.Status != info.Status || o.Accrual != info.Accrual {
