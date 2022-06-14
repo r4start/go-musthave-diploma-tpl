@@ -73,7 +73,7 @@ const (
 			id bigserial primary key,
 			number bigint not null unique,
 			user_id bigint not null,
-			sum bigint not null check (sum >= 0),
+			sum double precision not null check (sum >= 0.0),
 			processed_at timestamptz not null default now(),
 
 			FOREIGN KEY (user_id)
@@ -319,7 +319,7 @@ func (p *pgxStorage) GetUnfinishedOrders(ctx context.Context) ([]Order, error) {
 	return orders, nil
 }
 
-func (p *pgxStorage) Withdraw(ctx context.Context, userID, order, sum int64) error {
+func (p *pgxStorage) Withdraw(ctx context.Context, userID, order int64, sum float64) error {
 	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
 	defer cancel()
 
@@ -347,7 +347,7 @@ func (p *pgxStorage) Withdraw(ctx context.Context, userID, order, sum int64) err
 		}
 	}
 
-	if info.Current-float64(sum) < 0 {
+	if info.Current-sum < 0 {
 		return ErrNotEnoughBalance
 	}
 

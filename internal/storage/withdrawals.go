@@ -15,12 +15,12 @@ type BalanceInfo struct {
 
 type Withdrawal struct {
 	Order       int64
-	Sum         int64
+	Sum         float64
 	ProcessedAt time.Time
 }
 
 type WithdrawalStorage interface {
-	Withdraw(ctx context.Context, userID, order, sum int64) error
+	Withdraw(ctx context.Context, userID, order int64, sum float64) error
 	GetBalance(ctx context.Context, userID int64) (*BalanceInfo, error)
 	GetWithdrawals(ctx context.Context, userID int64) ([]Withdrawal, error)
 }
