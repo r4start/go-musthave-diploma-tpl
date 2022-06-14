@@ -58,7 +58,7 @@ const (
 			id bigserial primary key,
 			user_id bigint not null,
 			current double precision not null default 0 check (current >= 0.0),
-			withdrawn bigint not null default 0 check (withdrawn >= 0),
+			withdrawn double precision not null default 0 check (withdrawn >= 0),
 			updated_at timestamptz not null default now(),
 
 			FOREIGN KEY (user_id)
@@ -242,7 +242,7 @@ func (p *pgxStorage) AddOrder(ctx context.Context, userID, orderID int64) error 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == UniqueViolationCode && pgErr.ConstraintName == "orders_pkey" {
-				r, err := tx.Query(opCtx, GetOrderUser, orderID)
+				r, err := p.dbConn.Query(opCtx, GetOrderUser, orderID)
 				if err != nil {
 					return err
 				}
@@ -377,6 +377,8 @@ func (p *pgxStorage) Withdraw(ctx context.Context, userID, order int64, sum floa
 	if info.Current-sum < 0 {
 		return ErrNotEnoughBalance
 	}
+
+	r.Close()
 
 	_, err = tx.Exec(opCtx, AddWithdrawal, order, userID, sum)
 	if err != nil {
