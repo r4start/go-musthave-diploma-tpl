@@ -242,7 +242,7 @@ func (p *pgxStorage) AddOrder(ctx context.Context, userID, orderID int64) error 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == UniqueViolationCode && pgErr.ConstraintName == "orders_pkey" {
-				r, err := p.dbConn.Query(opCtx, GetOrderUser, orderID)
+				r, err := tx.Query(opCtx, GetOrderUser, orderID)
 				if err != nil {
 					return err
 				}
@@ -347,7 +347,7 @@ func (p *pgxStorage) GetUnfinishedOrders(ctx context.Context) ([]Order, error) {
 }
 
 func (p *pgxStorage) Withdraw(ctx context.Context, userID, order int64, sum float64) error {
-	opCtx, cancel := context.WithTimeout(p.ctx, DatabaseOperationTimeout)
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
 	defer cancel()
 
 	tx, err := p.dbConn.Begin(opCtx)
@@ -463,100 +463,118 @@ func (p *pgxStorage) GetWithdrawals(ctx context.Context, userID int64) ([]Withdr
 }
 
 func prepareUsersTable(ctx context.Context, conn *pgxpool.Pool) error {
-	if r, err := conn.Query(ctx, CheckUsersTable); err == nil {
-		r.Close()
-		return r.Err()
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	_, err := conn.Exec(opCtx, CheckUsersTable)
+	if err == nil {
+		return nil
 	}
 
-	r, err := conn.Query(ctx, CreateStateEnum)
+	tx, err := conn.Begin(opCtx)
 	if err != nil {
 		return err
 	}
-	if r.Err() != nil {
-		return err
-	}
-	r.Close()
+	defer tx.Rollback(ctx)
 
-	r, err = conn.Query(ctx, CreateUsersTableScheme)
+	_, err = tx.Exec(opCtx, CreateStateEnum)
 	if err != nil {
 		return err
 	}
-	if r.Err() != nil {
-		return err
-	}
-	r.Close()
 
-	r, err = conn.Query(ctx, CreateUserNameIndex)
+	_, err = tx.Exec(ctx, CreateUsersTableScheme)
 	if err != nil {
 		return err
 	}
-	r.Close()
 
-	return r.Err()
+	_, err = tx.Exec(ctx, CreateUserNameIndex)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(opCtx)
 }
 
 func prepareOrdersTable(ctx context.Context, conn *pgxpool.Pool) error {
-	if r, err := conn.Query(ctx, CheckOrdersTable); err == nil {
-		r.Close()
-		return r.Err()
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	_, err := conn.Exec(opCtx, CheckOrdersTable)
+	if err == nil {
+		return nil
 	}
 
-	r, err := conn.Query(ctx, CreateOrderStatusEnum)
+	tx, err := conn.Begin(opCtx)
 	if err != nil {
 		return err
 	}
-	if r.Err() != nil {
-		return err
-	}
-	r.Close()
+	defer tx.Rollback(ctx)
 
-	r, err = conn.Query(ctx, CreateOrdersTableScheme)
+	_, err = tx.Exec(opCtx, CreateOrderStatusEnum)
 	if err != nil {
 		return err
 	}
-	r.Close()
 
-	return r.Err()
+	_, err = tx.Exec(ctx, CreateOrdersTableScheme)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(opCtx)
 }
 
 func prepareBalanceTable(ctx context.Context, conn *pgxpool.Pool) error {
-	if r, err := conn.Query(ctx, CheckBalanceTable); err == nil {
-		r.Close()
-		return r.Err()
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	_, err := conn.Exec(opCtx, CheckBalanceTable)
+	if err == nil {
+		return nil
 	}
 
-	r, err := conn.Query(ctx, CreateBalanceTableScheme)
+	tx, err := conn.Begin(opCtx)
 	if err != nil {
 		return err
 	}
-	r.Close()
+	defer tx.Rollback(ctx)
 
-	r, err = conn.Query(ctx, CreateUserRelationsFunction)
+	_, err = tx.Exec(opCtx, CreateBalanceTableScheme)
 	if err != nil {
 		return err
 	}
-	r.Close()
 
-	r, err = conn.Query(ctx, CreateUserRelationsTrigger)
+	_, err = tx.Exec(ctx, CreateUserRelationsFunction)
 	if err != nil {
 		return err
 	}
-	r.Close()
 
-	return r.Err()
+	_, err = tx.Exec(ctx, CreateUserRelationsTrigger)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(opCtx)
 }
 
 func prepareWithdrawalTable(ctx context.Context, conn *pgxpool.Pool) error {
-	if r, err := conn.Query(ctx, CheckWithdrawalTable); err == nil {
-		r.Close()
-		return r.Err()
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	_, err := conn.Exec(opCtx, CheckWithdrawalTable)
+	if err == nil {
+		return nil
 	}
 
-	r, err := conn.Query(ctx, CreateWithdrawalTableScheme)
+	tx, err := conn.Begin(opCtx)
 	if err != nil {
 		return err
 	}
-	r.Close()
+	defer tx.Rollback(ctx)
 
-	return r.Err()
+	_, err = tx.Exec(opCtx, CreateWithdrawalTableScheme)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(opCtx)
 }
