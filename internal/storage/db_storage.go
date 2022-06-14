@@ -36,7 +36,7 @@ const (
 			number bigint primary key,
 			user_id bigint not null,
             status order_status not null default 'NEW',
-			accrual bigint not null default 0,
+			accrual double precision not null default 0.0,
 			uploaded_at timestamptz not null default now(),
 			updated_at timestamptz not null default now(),
 
@@ -56,7 +56,7 @@ const (
        create table balance (
 			id bigserial primary key,
 			user_id bigint not null,
-			current bigint not null default 0 check (current >= 0),
+			current double precision not null default 0 check (current >= 0.0),
 			withdrawn bigint not null default 0 check (withdrawn >= 0),
 			updated_at timestamptz not null default now(),
 

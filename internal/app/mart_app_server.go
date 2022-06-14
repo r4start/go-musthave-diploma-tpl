@@ -291,7 +291,7 @@ func (s *MartServer) getUserID(r *http.Request) (int64, error) {
 type orderResponse struct {
 	Number     string    `json:"number"`
 	Status     string    `json:"status"`
-	Accrual    int64     `json:"accrual,omitempty"`
+	Accrual    float64   `json:"accrual,omitempty"`
 	UploadedAt time.Time `json:"uploaded_at"`
 }
 

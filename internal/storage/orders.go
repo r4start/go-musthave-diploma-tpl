@@ -21,7 +21,7 @@ const (
 type Order struct {
 	ID         int64
 	Status     string
-	Accrual    int64
+	Accrual    float64
 	UploadedAt time.Time
 }
 
