@@ -184,14 +184,14 @@ func (s *MartServer) apiBalanceWithdraw(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	orderId, err := strconv.ParseInt(withdrawRequest.Order, 10, 64)
+	orderID, err := strconv.ParseInt(withdrawRequest.Order, 10, 64)
 	if err != nil {
 		s.logger.Error("bad order id", zap.String("order_id", withdrawRequest.Order))
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
 
-	err = s.storageService.Withdraw(r.Context(), userData.ID, orderId, withdrawRequest.Sum)
+	err = s.storageService.Withdraw(r.Context(), userData.ID, orderID, withdrawRequest.Sum)
 	if err != nil {
 		if err == storage.ErrNotEnoughBalance {
 			http.Error(w, "", http.StatusPaymentRequired)

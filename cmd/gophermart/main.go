@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/r4start/go-musthave-diploma-tpl/internal/accrual"
 	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"os"
@@ -57,9 +58,17 @@ func main() {
 	serverCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	app.RunServerApp(serverCtx, cfg.ServerAddress, logger, app.StorageServices{
+	storageServices := app.StorageServices{
 		UserStorage:       userStorage,
 		OrderStorage:      ordersStorage,
 		WithdrawalStorage: withdrawalStorage,
-	})
+	}
+
+	updaterCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	updater := accrual.NewUpdater(updaterCtx, cfg.AccrualSystemAddress, 10, storageServices, logger)
+	defer updater.Stop()
+
+	app.RunServerApp(serverCtx, cfg.ServerAddress, logger, storageServices)
 }

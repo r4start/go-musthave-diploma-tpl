@@ -46,9 +46,11 @@ const (
 
 	CheckOrdersTable = `select count(*) from orders;`
 
-	AddOrder      = `insert into orders (number, user_id) values ($1, $2);`
-	GetOrderUser  = `select user_id from orders where number = $1;`
-	GetUserOrders = `select number, status, accrual, uploaded_at from orders where user_id = $1;`
+	AddOrder            = `insert into orders (number, user_id) values ($1, $2);`
+	UpdateOrder         = `update orders set status=$1, accrual=$2, updated_at=now() where number=$3;`
+	GetOrderUser        = `select user_id from orders where number = $1;`
+	GetUserOrders       = `select number, status, accrual, uploaded_at from orders where user_id = $1;`
+	GetUnfinishedOrders = `select number, status, accrual, uploaded_at from orders where status in ('NEW', 'PROCESSING');`
 
 	CreateBalanceTableScheme = `
        create table balance (
@@ -243,11 +245,57 @@ func (p *pgxStorage) AddOrder(ctx context.Context, userID, orderID int64) error 
 	return tx.Commit(opCtx)
 }
 
+func (p *pgxStorage) UpdateOrder(ctx context.Context, order Order) error {
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	tx, err := p.dbConn.Begin(opCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(p.ctx)
+
+	_, err = tx.Exec(opCtx, UpdateOrder, order.Status, order.Accrual, order.ID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(opCtx)
+}
+
 func (p *pgxStorage) GetOrders(ctx context.Context, userID int64) ([]Order, error) {
 	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
 	defer cancel()
 
 	r, err := p.dbConn.Query(opCtx, GetUserOrders, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+
+	defer r.Close()
+
+	orders := make([]Order, 0)
+	for r.Next() {
+		order := Order{}
+		if err := r.Scan(&order.ID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, nil
+}
+
+func (p *pgxStorage) GetUnfinishedOrders(ctx context.Context) ([]Order, error) {
+	opCtx, cancel := context.WithTimeout(ctx, DatabaseOperationTimeout)
+	defer cancel()
+
+	r, err := p.dbConn.Query(opCtx, GetUnfinishedOrders)
 
 	if err != nil {
 		return nil, err
