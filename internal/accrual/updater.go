@@ -8,6 +8,8 @@ import (
 	"github.com/r4start/go-musthave-diploma-tpl/internal/storage"
 	"go.uber.org/zap"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -25,9 +27,8 @@ type orderInfo struct {
 }
 
 type Config struct {
-	BaseAddr  string
-	UpdateRPS int
-	Logger    *zap.Logger
+	BaseAddr string
+	Logger   *zap.Logger
 	storage.AppStorage
 }
 
@@ -41,7 +42,25 @@ type Updater struct {
 func NewUpdater(ctx context.Context, cfg Config) *Updater {
 	ctx, cancel := context.WithCancel(ctx)
 
-	client := resty.New()
+	retryFunc := resty.RetryAfterFunc(func(client *resty.Client, response *resty.Response) (time.Duration, error) {
+		if response.StatusCode() != http.StatusTooManyRequests {
+			return 0, nil
+		}
+
+		retryAfterValue := response.Header().Get("Retry-After")
+		if len(retryAfterValue) == 0 {
+			return 0, nil
+		}
+
+		seconds, err := strconv.ParseInt(retryAfterValue, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Duration(seconds) * time.Second, nil
+	})
+
+	client := resty.New().SetRetryAfter(retryFunc).SetRetryCount(3)
 
 	updater := &Updater{
 		ctx:       ctx,
@@ -84,33 +103,49 @@ func (u *Updater) update() {
 		return
 	}
 
+	var wg sync.WaitGroup
+	ordersInfo := make([]*orderInfo, len(orders))
+
 	ordersWithBalanceUpdate := make([]storage.Order, 0)
-	for _, o := range orders {
-		info, err := u.getOrderStatus(o.ID)
-		if err != nil {
-			u.Logger.Error("failed to get order info", zap.Int64("order_id", o.ID), zap.Error(err))
+	for i, o := range orders {
+		wg.Add(1)
+		go func(index int, o storage.Order) {
+			defer wg.Done()
+			info, err := u.getOrderStatus(o.ID)
+			if err != nil {
+				u.Logger.Error("failed to get order info", zap.Int64("order_id", o.ID), zap.Error(err))
+				return
+			}
+			ordersInfo[index] = info
+		}(i, o)
+	}
+
+	wg.Wait()
+
+	for i, info := range ordersInfo {
+		if info == nil {
 			continue
 		}
 
 		switch info.Status {
 		case StatusRegistered:
-			o.Status = storage.StatusProcessing
+			orders[i].Status = storage.StatusProcessing
 		case StatusInvalid:
-			o.Status = storage.StatusInvalid
+			orders[i].Status = storage.StatusInvalid
 		case StatusProcessing:
-			o.Status = storage.StatusProcessing
+			orders[i].Status = storage.StatusProcessing
 		case StatusProcessed:
-			o.Status = storage.StatusProcessed
-			o.Accrual = info.Accrual
+			orders[i].Status = storage.StatusProcessed
+			orders[i].Accrual = info.Accrual
 		}
 
 		if info.Status == storage.StatusProcessed {
-			ordersWithBalanceUpdate = append(ordersWithBalanceUpdate, o)
+			ordersWithBalanceUpdate = append(ordersWithBalanceUpdate, orders[i])
 			continue
 		}
 
-		if err := u.UpdateOrder(u.ctx, o); err != nil {
-			u.Logger.Error("failed to update order", zap.Int64("order_id", o.ID), zap.Error(err))
+		if err := u.UpdateOrder(u.ctx, orders[i]); err != nil {
+			u.Logger.Error("failed to update order", zap.Int64("order_id", orders[i].ID), zap.Error(err))
 		}
 	}
 

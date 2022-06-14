@@ -63,7 +63,6 @@ func main() {
 
 	accCfg := accrual.Config{
 		BaseAddr:   cfg.AccrualSystemAddress,
-		UpdateRPS:  10,
 		Logger:     logger,
 		AppStorage: st,
 	}
